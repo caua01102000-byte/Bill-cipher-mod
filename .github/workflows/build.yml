@@ -1,0 +1,56 @@
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.1.1'
+
+      - name: Preparar projeto
+        run: |
+          if [ -f mod-source.zip ]; then
+            mkdir -p proj
+            unzip -q -o mod-source.zip -d proj
+            DIR=$(dirname "$(find proj -maxdepth 3 -name build.gradle | head -1)")
+          else
+            DIR=.
+          fi
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "Projeto em: $DIR"
+          ls -la "$DIR"
+
+      - name: Compilar
+        run: |
+          cd "$PROJECT_DIR"
+          gradle build --no-daemon --stacktrace
+
+      - name: Mostrar JAR gerado
+        run: ls -la "$PROJECT_DIR"/build/libs/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: billcipher-jar
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
+          if-no-files-found: error
+
+      - name: Publicar JAR em Releases (download direto pelo celular)
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Bill Cipher Mod - build ${{ github.run_number }}
+          files: ${{ env.PROJECT_DIR }}/build/libs/*.jar
